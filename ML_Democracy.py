@@ -1,9 +1,12 @@
 # Nice home grown library for getting 
 # your AI's to vote on important business
 
+#even the voting algo needs some industrial strength libraries ;)
 import time
+import numpy as np
 
 from matplotlib.pyplot import cla
+from scipy.sparse import data
 __default_x_train__ = None
 __default_y_train__ = None
 __default_x_test__ = None
@@ -86,41 +89,90 @@ def train_algos():
       i.train_time = time.time()-start
       print(f"{i.name}, train: {i.train_score}, test: {i.test_score}")
 
-def __vote__(datapoint):
-  class_votes = [0]*__num_classifications__
-  abs_class_votes = 0
+def __vote__(datapoint, method):
+  class_votes = np.zeros((__num_classifications__, len(datapoint)), dtype='float32')
+  abs_class_votes = np.zeros(len(datapoint), dtype='float32')
   for i in __algos__:
-    weight = (i.test_score-1.0/__num_classifications__)
-    j = i.predict_func(i.model, datapoint) # predict should output a number, not a one-hot encoding
+    weight = 1.0
+    if method==1:
+      weight = 1.0/(1.01-i.test_score)#(i.test_score-1.0/__num_classifications__) #makes models that are worse than random have a negative vote
+    elif method==2:
+      weight = (i.test_score-1.0/__num_classifications__)
+    
+    predictions = i.predict_func(i.model, datapoint) # predict should output a number, not a one-hot encoding
     #print(f'{i.name} prediction: {j}, test score: {i.test_score} weight: {weight}')
-    class_votes[j] += weight
-    abs_class_votes += abs(weight)
+    for j in range(len(datapoint)):
+      class_votes[predictions[j],j] += weight
+      abs_class_votes[j] += abs(weight)
+  #print(f'class vote shape: {class_votes.shape}')
+  #print(f'class votes: {class_votes[:,0]}')
+  for i in range(len(datapoint)):
+    if abs_class_votes[i]!=0:
+      class_votes[:,i]/=abs_class_votes[i]
+      # remember that class_votes[i] is an array of len num_classifications + 1
+      # and the last col will be all ones now so we can remove it 
+  #class_votes = np.delete(class_votes, __num_classifications__,axis=1)
+  #print(f'class votes /= abs: {class_votes[:,0]}')
 
-  #print(f'class votes: {class_votes}')
-  for i in range(__num_classifications__):
-    if abs_class_votes!=0:
-      class_votes[i]/=abs_class_votes
-  #print(f'class votes /= abs: {class_votes}')
+  if(len(datapoint)==1):
+    return class_votes[0]
   return class_votes
 
-def predict_one(x):
+
+def predict_one(x, method):
   # change this so that x is a list
   # return max of class votes
-  votes = __vote__(x)
+  votes = __vote__([x], method)
   return votes.index(max(votes))
 
-def validate(x, y):
-  
+def predict(x, method):
+  # return max of class votes for each x
+  votes = __vote__(x, method)
+  return np.argmax(votes, axis=0)
+
+def validate_voting(x, y, method=1):
+  print("Validating voting ensemble method...")
   num_right = 0
+  predictions = predict(x, method)
+  #print(f'shape of x: {x.shape}, len x: {len(x)}')
   for i in range(len(x)):
     #print(f'y actual: {y[i]}')
-    if(predict_one(x[i]) == y[i]):
+    if(predictions[i] == y[i]):
       num_right+=1
       #print("correct")
     #input()
-  print(f'num right/len: {num_right*1.0/len(x)}')
+  print(f'Score: {num_right*1.0/len(x)}')
   return num_right*1.0/len(x)
+
+
+def append_model_outputs(x, debug=False):
+  if debug:
+    print(f"Shape before appending predictions: {x.shape}")
+  new_x = np.zeros((len(x), __num_classifications__*len(__algos__)), 'float32')
+  for i in range(len(__algos__)):
+    predictions = __algos__[i].predict_func(__algos__[i].model, x)
+    for j in range(len(predictions)):
+      new_x[j,predictions[j]+__num_classifications__*i]=1.0
+  new_x = np.concatenate((x, new_x), 1)
+  if debug:
+    print(f"Shape after appending predictions: {new_x.shape}")
+  return new_x
+
+def validate_funnel(x_train, y_train, x_test, y_test, classifier, name="funnel model", debug=False):
+  if debug:
+    print("Validating funnel ensemble method...")
+  
+  x_train_n = append_model_outputs(x_train)
+  x_test_n = append_model_outputs(x_test)
+  #print(f'shape of x: {x.shape}, len x: {len(x)}')
+  start_t = time.time()
+  classifier = classifier.fit(x_train_n, y_train)
+  train_score = classifier.score(x_train_n, y_train)
+  test_score = classifier.score(x_test_n, y_test)
+  print(f"name: {name:15}, train accuracy: {train_score:8}, test accuracy: {test_score:8}, time: {time.time()-start_t:17}s")
+  return train_score
 
 def current_algos():
   for i in __algos__:
-    print(f"name: {i.name:15}, train accuracy: {i.train_score:8}, test accuracy: {i.test_score:8}, time: {i.train_time:17}s")
+    print(f"name: {i.name:15}, train accuracy: {i.train_score:.4f}, test accuracy: {i.test_score:.4f}, time: {i.train_time:17}s")
+
