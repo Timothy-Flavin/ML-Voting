@@ -16,10 +16,12 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.neural_network import MLPClassifier
+import xgboost as xgb
+from xgboost import XGBClassifier
 # Spicier preprocessing techniques 
 from sklearn.decomposition import PCA
 # Super Secret Constants for test purposes ;) 
-TRAIN_LEN = 5000
+TRAIN_LEN = 60000
 TEST_LEN  = 10000
 
 # Data to test with
@@ -79,14 +81,14 @@ def log_init(x_train, y_train, x_test, y_test):
   return train_score, test_score, log 
   
 def svm_init(x_train, y_train, x_test, y_test):
-  svmp = svm.SVC(tol=0.05).fit(x_train, y_train)
+  svmp = svm.SVC(tol=0.075).fit(x_train, y_train)
   test_score = svmp.score(x_test, y_test)
   train_score = svmp.score(x_train, y_train)
 
   return train_score, test_score, svmp 
 
 def rf_init(x_train, y_train, x_test, y_test):
-  rf = RandomForestClassifier(n_estimators=500).fit(x_train, y_train)
+  rf = RandomForestClassifier(n_estimators=250).fit(x_train, y_train)
   test_score = rf.score(x_test, y_test)
   train_score = rf.score(x_train, y_train)
 
@@ -103,6 +105,11 @@ def gbc_init(x_train, y_train, x_test, y_test):
 
   return train_score, test_score, gbc 
 
+def xgb_init(x_train, y_train, x_test, y_test):
+  xgbc = XGBClassifier().fit(x_train, y_train)
+  test_score = xgbc.score(x_test, y_test)
+  train_score = xgbc.score(x_train, y_train)
+  return train_score, test_score, xgbc 
 # Will be different for tf models and any other library
 # They will need to transform the data and possibly not 
 # do one hot encoding. 
@@ -112,13 +119,14 @@ def predict(model, x):
 
 MLD.set_num_classifications(10)
 MLD.set_default_data(x_train, x_test, y_train, y_test)
-MLD.add_algo(MLD.ML_Algo(log_init, predict, "logistic reg"))
+MLD.add_algo(MLD.ML_Algo(log_init, predict, "logistic reg")) # can add a cutom dataset
 MLD.add_algo(MLD.ML_Algo(mlp_init, predict, "mlp classifier"))
 MLD.add_algo(MLD.ML_Algo(lda_init, predict, "lda"))
-MLD.add_algo(MLD.ML_Algo(nb_init, predict, "Nbayes"))
+MLD.add_algo(MLD.ML_Algo(nb_init, predict,  "Nbayes"))
 MLD.add_algo(MLD.ML_Algo(svm_init, predict, "support vector"))
 MLD.add_algo(MLD.ML_Algo(rf_init, predict, "random forest"))
 MLD.add_algo(MLD.ML_Algo(gbc_init, predict, "gradient boost"))
+MLD.add_algo(MLD.ML_Algo(xgb_init, predict, "Ex gradient boost"))
 MLD.train_algos() # add nullable args for funnel or not
 MLD.current_algos()
 MLD.validate_voting(x_test, y_test, method=0) # change this back to validate, when training set function to vote or not
@@ -126,4 +134,3 @@ MLD.validate_voting(x_test, y_test, method=1) # change this back to validate, wh
 MLD.validate_voting(x_test, y_test, method=2) # change this back to validate, when training set function to vote or not
 MLD.validate_funnel(x_train, y_train, x_test, y_test, MLPClassifier(hidden_layer_sizes=(512,256,64,32,), alpha=0.01, max_iter=50), name="Mlp stack")
 MLD.validate_funnel(x_train, y_train, x_test, y_test, svm.SVC(tol=0.075), name="Svc stack")
-

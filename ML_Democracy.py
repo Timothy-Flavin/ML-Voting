@@ -118,7 +118,6 @@ def __vote__(datapoint, method):
     return class_votes[0]
   return class_votes
 
-
 def predict_one(x, method):
   # change this so that x is a list
   # return max of class votes
@@ -143,7 +142,6 @@ def validate_voting(x, y, method=1):
     #input()
   print(f'Score: {num_right*1.0/len(x)}')
   return num_right*1.0/len(x)
-
 
 def append_model_outputs(x, debug=False):
   if debug:
