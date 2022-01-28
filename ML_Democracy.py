@@ -67,7 +67,11 @@ def remove_algo(name):
   #remove by name, problems for later
   __algos__.pop()
 
-def train_algos():
+def remove_all_algos():
+  global __algos__ 
+  __algos__ = list()
+
+def train_algos(output=False):
   for i in __algos__: 
     if not i.pre_trained:
       tx = i.x_train
@@ -87,7 +91,8 @@ def train_algos():
       start = time.time()
       i.train_score, i.test_score, i.model = i.init_func(tx, ty, tex, tey)
       i.train_time = time.time()-start
-      print(f"{i.name}, train: {i.train_score}, test: {i.test_score}")
+      if output:
+        print(f"{i.name}, train: {i.train_score}, test: {i.test_score}, time: {i.train_time}")
 
 def __vote__(datapoint, method):
   class_votes = np.zeros((__num_classifications__, len(datapoint)), dtype='float32')
@@ -100,6 +105,7 @@ def __vote__(datapoint, method):
       weight = (i.test_score-1.0/__num_classifications__)
     
     predictions = i.predict_func(i.model, datapoint) # predict should output a number, not a one-hot encoding
+    #print(predictions)
     #print(f'{i.name} prediction: {j}, test score: {i.test_score} weight: {weight}')
     for j in range(len(datapoint)):
       class_votes[predictions[j],j] += weight
@@ -113,7 +119,7 @@ def __vote__(datapoint, method):
       # and the last col will be all ones now so we can remove it 
   #class_votes = np.delete(class_votes, __num_classifications__,axis=1)
   #print(f'class votes /= abs: {class_votes[:,0]}')
-
+  #print(f"class votes: {class_votes}")
   if(len(datapoint)==1):
     return class_votes[0]
   return class_votes
@@ -128,6 +134,12 @@ def predict(x, method):
   # return max of class votes for each x
   votes = __vote__(x, method)
   return np.argmax(votes, axis=0)
+
+def predict_no_vote(x):
+  predictions = {}
+  for i in __algos__:
+    predictions[i.name]=i.predict_func(i.model,x=x)
+  return predictions
 
 def validate_voting(x, y, method=1):
   print("Validating voting ensemble method...")
@@ -174,3 +186,13 @@ def current_algos():
   for i in __algos__:
     print(f"name: {i.name:15}, train accuracy: {i.train_score:.4f}, test accuracy: {i.test_score:.4f}, time: {i.train_time:17}s")
 
+def current_algos_raw():
+  algosList = list()
+  for i in __algos__:
+    algodict={}
+    algodict['name']  = i.name
+    algodict['train'] = i.train_score
+    algodict['test']  = i.test_score
+    algodict['time']  = i.train_time
+    algosList.append(algodict)
+  return algosList
