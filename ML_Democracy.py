@@ -4,6 +4,7 @@
 #even the voting algo needs some industrial strength libraries ;)
 import time
 import numpy as np
+import random
 
 from matplotlib.pyplot import cla
 from scipy.sparse import data
@@ -27,6 +28,7 @@ class ML_Algo:
   x_test  = None
   y_test  = None
   train_time = 0
+  indices=None
 
   def __init__(self, init_function, predict_function, model_name, x_train=None, y_train=None, x_test=None, y_test=None):
     self.init_func = init_function
@@ -37,6 +39,7 @@ class ML_Algo:
     self.y_train = y_train
     self.x_test = x_test
     self.y_test = y_test
+    self.indices=None
 
 def set_default_data(x_train, x_test, y_train, y_test):
   global __default_x_train__ 
@@ -71,23 +74,35 @@ def remove_all_algos():
   global __algos__ 
   __algos__ = list()
 
-def train_algos(output=False):
+def train_algos(output=False, featureProportion=-1.0):
   for i in __algos__: 
     if not i.pre_trained:
       tx = i.x_train
       ty = i.y_train
       tex = i.x_test
       tey = i.y_test
-
+      indices=list()
+      if(featureProportion>=0):
+        indices = list(random.sample(list(np.arange(0,tx.shape[-1])),int(tx.shape[-1]*featureProportion)))
+        indices.sort()
+        i.indices=indices
+      else:
+        indices = None
+        i.indices=None
+      #print(indices)
       if tx is None:
-        tx = __default_x_train__
+        tx = np.take(__default_x_train__, indices,axis=-1)
       if ty is None:
         ty = __default_y_train__
       if tex is None:
-        tex = __default_x_test__
-      if tey is None:
-        tey = __default_x_test__
+        tex = np.take(__default_x_test__, indices,axis=-1)
+      if tey is None :
+        tey = __default_y_test__
       
+      if(featureProportion>=0):
+        tx = np.take(__default_x_train__, indices,axis=-1)
+        tex = np.take(__default_x_test__, indices,axis=-1)
+
       start = time.time()
       i.train_score, i.test_score, i.model = i.init_func(tx, ty, tex, tey)
       i.train_time = time.time()-start
@@ -104,7 +119,10 @@ def __vote__(datapoint, method):
     elif method==2:
       weight = (i.test_score-1.0/__num_classifications__)
     
-    predictions = i.predict_func(i.model, datapoint) # predict should output a number, not a one-hot encoding
+    if i.indices==None:
+      predictions = i.predict_func(i.model, datapoint) # predict should output a number, not a one-hot encoding
+    else:
+      predictions = i.predict_func(i.model, np.take(datapoint, i.indices,axis=-1))
     #print(predictions)
     #print(f'{i.name} prediction: {j}, test score: {i.test_score} weight: {weight}')
     for j in range(len(datapoint)):
@@ -160,7 +178,7 @@ def append_model_outputs(x, debug=False):
     print(f"Shape before appending predictions: {x.shape}")
   new_x = np.zeros((len(x), __num_classifications__*len(__algos__)), 'float32')
   for i in range(len(__algos__)):
-    predictions = __algos__[i].predict_func(__algos__[i].model, x)
+    predictions = __algos__[i].predict_func(__algos__[i].model, np.take(x, __algos__[i].indices,axis=-1))
     for j in range(len(predictions)):
       new_x[j,predictions[j]+__num_classifications__*i]=1.0
   new_x = np.concatenate((x, new_x), 1)
@@ -180,7 +198,7 @@ def validate_funnel(x_train, y_train, x_test, y_test, classifier, name="funnel m
   train_score = classifier.score(x_train_n, y_train)
   test_score = classifier.score(x_test_n, y_test)
   print(f"name: {name:15}, train accuracy: {train_score:8}, test accuracy: {test_score:8}, time: {time.time()-start_t:17}s")
-  return train_score
+  return test_score
 
 def current_algos():
   for i in __algos__:
