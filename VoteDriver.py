@@ -127,7 +127,7 @@ MLD.add_algo(MLD.ML_Algo(svm_init, predict, "support vector"))
 MLD.add_algo(MLD.ML_Algo(rf_init, predict, "random forest"))
 MLD.add_algo(MLD.ML_Algo(gbc_init, predict, "gradient boost"))
 MLD.add_algo(MLD.ML_Algo(xgb_init, predict, "Ex gradient boost"))
-MLD.train_algos() # add nullable args for funnel or not
+MLD.train_algos(bag=True, featureProportion=0.33) # add nullable args for funnel or not
 MLD.current_algos()
 MLD.validate_voting(x_test, y_test, method=0) # change this back to validate, when training set function to vote or not
 MLD.validate_voting(x_test, y_test, method=1) # change this back to validate, when training set function to vote or not

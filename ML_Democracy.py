@@ -43,7 +43,7 @@ class ML_Algo:
     self.indices=None
   
   def copy(self):
-    cp = ML_Algo(self.init_function, self.predict_function, self.model_name, self.x_train, self.y_train, self.x_test, self.y_test, axis=-1)
+    cp = ML_Algo(self.init_func, self.predict_func, self.name, self.x_train, self.y_train, self.x_test, self.y_test, axis=-1)
     return cp
 def set_default_data(x_train, x_test, y_train, y_test):
   global __default_x_train__ 
@@ -87,15 +87,16 @@ def remove_all_algos():
   global __algos__ 
   __algos__ = list()
 
-def train_algos(output=False, featureProportion=-1.0):
+def train_algos(output=False, featureProportion=-1.0, bag=False):
   if featureProportion>1.0:
     raise ArgumentError("Feature proportion cannot be more than 1.0")
   for i in __algos__: 
     if not i.pre_trained:
-      tx = i.x_train
+      tx = i.x_train 
       ty = i.y_train
       tex = i.x_test
       tey = i.y_test
+
       indices=list()
       if(featureProportion>=0):
         indices = list(random.sample(list(np.arange(0,tx.shape[i.axis])),int(tx.shape[i.axis]*featureProportion)))
@@ -106,17 +107,25 @@ def train_algos(output=False, featureProportion=-1.0):
         i.indices=None
       #print(indices)
       if tx is None:
-        tx = np.take(__default_x_train__, indices,axis=i.axis)
+        tx = __default_x_train__
       if ty is None:
         ty = __default_y_train__
       if tex is None:
-        tex = np.take(__default_x_test__, indices,axis=i.axis)
+        tex = __default_x_test__
       if tey is None :
         tey = __default_y_test__
       
       if(featureProportion>=0):
-        tx = np.take(__default_x_train__, indices,axis=i.axis)
-        tex = np.take(__default_x_test__, indices,axis=i.axis)
+        tx = np.take(tx, indices,axis=i.axis)
+        tex = np.take(tex, indices,axis=i.axis)
+
+      if bag:
+        choices = random.choices(population=list(np.arange(0,len(i.x_train))),k=len(i.x_train))
+        tx = tx[choices]
+        ty = ty[choices]
+        choices = random.choices(population=list(np.arange(0,len(i.x_test))),k=len(i.x_test))
+        tex = tex[choices]
+        tey = tey[choices]
 
       start = time.time()
       i.train_score, i.test_score, i.model = i.init_func(tx, ty, tex, tey)
