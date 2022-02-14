@@ -196,6 +196,7 @@ def append_model_outputs(x, debug=False):
     predictions = None
     if __algos__[i].indices is None:
       predictions = __algos__[i].predict_func(__algos__[i].model, x)
+      
     else: 
       predictions = __algos__[i].predict_func(__algos__[i].model, np.take(x, __algos__[i].indices,axis=i.axis))
     for j in range(len(predictions)):
