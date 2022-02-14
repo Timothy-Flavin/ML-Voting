@@ -2,11 +2,11 @@
 # your AI's to vote on important business
 
 #even the voting algo needs some industrial strength libraries ;)
+from argparse import ArgumentError
 import time
 import numpy as np
 import random
 
-from matplotlib.pyplot import cla
 from scipy.sparse import data
 __default_x_train__ = None
 __default_y_train__ = None
@@ -17,8 +17,8 @@ __num_classifications__ = 0
 
 class ML_Algo:
   pre_trained = False
-  init_func=None
-  predict_func=None
+  init_func = None
+  predict_func = None
   name="default"
   train_score = 0
   test_score = 0
@@ -28,19 +28,23 @@ class ML_Algo:
   x_test  = None
   y_test  = None
   train_time = 0
-  indices=None
+  indices = None
+  axis = -1
 
-  def __init__(self, init_function, predict_function, model_name, x_train=None, y_train=None, x_test=None, y_test=None):
+  def __init__(self, init_function, predict_function, model_name, x_train=None, y_train=None, x_test=None, y_test=None, axis=-1):
     self.init_func = init_function
     self.predict_func = init_function
     self.predict_func = predict_function
     self.name = model_name
-    self.x_train =x_train
+    self.x_train = x_train
     self.y_train = y_train
     self.x_test = x_test
     self.y_test = y_test
     self.indices=None
-
+  
+  def copy(self):
+    cp = ML_Algo(self.init_function, self.predict_function, self.model_name, self.x_train, self.y_train, self.x_test, self.y_test, axis=-1)
+    return cp
 def set_default_data(x_train, x_test, y_train, y_test):
   global __default_x_train__ 
   global __default_x_test__  
@@ -55,7 +59,7 @@ def set_num_classifications(num):
   global __num_classifications__ 
   __num_classifications__ = num
 
-def add_algo(ML_Algo):
+def __add_algo__(ML_Algo):
   __algos__.append(ML_Algo)
   if ML_Algo.x_train is None:
     ML_Algo.x_train = __default_x_train__
@@ -66,6 +70,15 @@ def add_algo(ML_Algo):
   if ML_Algo.y_test is None:
     ML_Algo.y_test = __default_y_test__
 
+def add_algo(ML_Algo, num=1):
+  if num==1:
+    __add_algo__(ML_Algo)
+  else:
+    for i in range(num):
+      al = ML_Algo.copy()
+      al.name = al.name + " " + str(i)
+      __add_algo__(al)
+
 def remove_algo(name):
   #remove by name, problems for later
   __algos__.pop()
@@ -75,6 +88,8 @@ def remove_all_algos():
   __algos__ = list()
 
 def train_algos(output=False, featureProportion=-1.0):
+  if featureProportion>1.0:
+    raise ArgumentError("Feature proportion cannot be more than 1.0")
   for i in __algos__: 
     if not i.pre_trained:
       tx = i.x_train
@@ -83,7 +98,7 @@ def train_algos(output=False, featureProportion=-1.0):
       tey = i.y_test
       indices=list()
       if(featureProportion>=0):
-        indices = list(random.sample(list(np.arange(0,tx.shape[-1])),int(tx.shape[-1]*featureProportion)))
+        indices = list(random.sample(list(np.arange(0,tx.shape[i.axis])),int(tx.shape[i.axis]*featureProportion)))
         indices.sort()
         i.indices=indices
       else:
@@ -91,17 +106,17 @@ def train_algos(output=False, featureProportion=-1.0):
         i.indices=None
       #print(indices)
       if tx is None:
-        tx = np.take(__default_x_train__, indices,axis=-1)
+        tx = np.take(__default_x_train__, indices,axis=i.axis)
       if ty is None:
         ty = __default_y_train__
       if tex is None:
-        tex = np.take(__default_x_test__, indices,axis=-1)
+        tex = np.take(__default_x_test__, indices,axis=i.axis)
       if tey is None :
         tey = __default_y_test__
       
       if(featureProportion>=0):
-        tx = np.take(__default_x_train__, indices,axis=-1)
-        tex = np.take(__default_x_test__, indices,axis=-1)
+        tx = np.take(__default_x_train__, indices,axis=i.axis)
+        tex = np.take(__default_x_test__, indices,axis=i.axis)
 
       start = time.time()
       i.train_score, i.test_score, i.model = i.init_func(tx, ty, tex, tey)
@@ -122,7 +137,7 @@ def __vote__(datapoint, method):
     if i.indices==None:
       predictions = i.predict_func(i.model, datapoint) # predict should output a number, not a one-hot encoding
     else:
-      predictions = i.predict_func(i.model, np.take(datapoint, i.indices,axis=-1))
+      predictions = i.predict_func(i.model, np.take(datapoint, i.indices,axis=i.axis))
     #print(predictions)
     #print(f'{i.name} prediction: {j}, test score: {i.test_score} weight: {weight}')
     for j in range(len(datapoint)):
@@ -178,7 +193,11 @@ def append_model_outputs(x, debug=False):
     print(f"Shape before appending predictions: {x.shape}")
   new_x = np.zeros((len(x), __num_classifications__*len(__algos__)), 'float32')
   for i in range(len(__algos__)):
-    predictions = __algos__[i].predict_func(__algos__[i].model, np.take(x, __algos__[i].indices,axis=-1))
+    predictions = None
+    if __algos__[i].indices is None:
+      predictions = __algos__[i].predict_func(__algos__[i].model, x)
+    else: 
+      predictions = __algos__[i].predict_func(__algos__[i].model, np.take(x, __algos__[i].indices,axis=i.axis))
     for j in range(len(predictions)):
       new_x[j,predictions[j]+__num_classifications__*i]=1.0
   new_x = np.concatenate((x, new_x), 1)
