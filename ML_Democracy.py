@@ -31,7 +31,10 @@ class ML_Algo:
   indices = None
   axis = -1
 
-  def __init__(self, init_function, predict_function, model_name, x_train=None, y_train=None, x_test=None, y_test=None, axis=-1):
+  def __default_transform__(self, tx,ty,tex,tey):
+    return tx, ty, tex, tey
+
+  def __init__(self, init_function, predict_function, model_name, x_train=None, y_train=None, x_test=None, y_test=None, axis=-1, transform=None):
     self.init_func = init_function
     self.predict_func = init_function
     self.predict_func = predict_function
@@ -41,7 +44,11 @@ class ML_Algo:
     self.x_test = x_test
     self.y_test = y_test
     self.indices=None
-  
+    if transform is None:
+      self.data_transform = self.__default_transform__
+    else:
+      self.data_transform = transform
+
   def copy(self):
     cp = ML_Algo(self.init_func, self.predict_func, self.name, self.x_train, self.y_train, self.x_test, self.y_test, axis=-1)
     return cp
@@ -127,6 +134,10 @@ def train_algos(output=False, featureProportion=-1.0, bag=False):
         tex = tex[choices]
         tey = tey[choices]
 
+      transtart = time.time()
+      tx, ty, tex, tey = i.data_transform(tx,ty,tex,tey)
+      i.trans_time = time.time()-transtart
+
       start = time.time()
       i.train_score, i.test_score, i.model = i.init_func(tx, ty, tex, tey)
       i.train_time = time.time()-start
@@ -207,7 +218,7 @@ def append_model_outputs(x, debug=False):
       predictions = __algos__[i].predict_func(__algos__[i].model, x)
       
     else: 
-      predictions = __algos__[i].predict_func(__algos__[i].model, np.take(x, __algos__[i].indices,axis=i.axis))
+      predictions = __algos__[i].predict_func(__algos__[i].model, np.take(x, __algos__[i].indices,axis=__algos__[i].axis))
     for j in range(len(predictions)):
       new_x[j,predictions[j]+__num_classifications__*i]=1.0
   new_x = np.concatenate((x, new_x), 1)
@@ -231,7 +242,7 @@ def validate_funnel(x_train, y_train, x_test, y_test, classifier, name="funnel m
 
 def current_algos():
   for i in __algos__:
-    print(f"name: {i.name:15}, train accuracy: {i.train_score:.4f}, test accuracy: {i.test_score:.4f}, time: {i.train_time:17}s")
+    print(f"name: {i.name:15}, train accuracy: {i.train_score:.4f}, test accuracy: {i.test_score:.4f}, time: {i.train_time:17}s, trans_time: {i.trans_time:18}s")
 
 def current_algos_raw():
   algosList = list()
@@ -241,5 +252,6 @@ def current_algos_raw():
     algodict['train'] = i.train_score
     algodict['test']  = i.test_score
     algodict['time']  = i.train_time
+    algodict['trans_time'] = i.trans_time
     algosList.append(algodict)
   return algosList
