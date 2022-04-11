@@ -135,7 +135,9 @@ def train_algos(output=False, featureProportion=-1.0, bag=False):
         tey = tey[choices]
 
       transtart = time.time()
-      tx, ty, tex, tey = i.data_transform(tx,ty,tex,tey)
+      tx = i.data_transform(tx)
+      ty = i.data_transform(ty)
+      #tx, ty, tex, tey = i.data_transform(tx,ty,tex,tey)
       i.trans_time = time.time()-transtart
 
       start = time.time()
