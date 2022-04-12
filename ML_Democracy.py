@@ -12,7 +12,7 @@ class ML_Algo:
   def __default_transform__(self, tx,ty):
     return tx, ty
 
-  def __init__(self, fit_function, predict_function, model_name, x_train=None, y_train=None, x_val=None, y_val=None, transform=None, pre_trained=False):
+  def __init__(self, fit_function, predict_function, model_name, transform=None, pre_trained=False):
     self.fit_func = fit_function
     self.predict_func = predict_function
     self.name = model_name
@@ -35,9 +35,14 @@ class ML_Algo:
     return cp
 
 class ML_Democracy:
-  __algos__ = list()
-  __num_classifications__ = 0
 
+  def __init__(self):
+    self.__algos__ = list()
+    self.__num_classifications__ = 0
+    self.featureProportion=None 
+    self.bag=None
+    self.fast=None
+    self.axis=None
   def set_default_data(self, x_train, x_val, y_train, y_val):
     self.__default_x_train__ = x_train
     self.__default_x_val__  = x_val
@@ -73,16 +78,24 @@ class ML_Democracy:
         self.__algos__.pop(i)
         return
 
-  def get_algo_names(self):
+  def get_algo_names(self, verbose=False):
     names = list()
     for i in self.__algos__:
       names.append(i.name)
+      if verbose:
+        print(i.name)
     return names
 
   def remove_all_algos(self):
     self.__algos__ = list()
 
+  def mark_for_retrain(self,name):
+    for i in self.__algos__:
+      if i.name == name:
+        i.pre_trained = False
+
   def train_algos(self, featureProportion=-1.0, bag=False, fast=False, axis=-1, x_train=None, y_train=None, x_val=None, y_val=None, verbose=False):
+    # Add check to make sure args are the same or models are all untrained
     if featureProportion>1.0:
       raise ValueError(f"Feature proportion of {featureProportion} cannot be more than 1.0")
     for i in self.__algos__: 
@@ -109,7 +122,7 @@ class ML_Democracy:
 
         indices=list()
         if(featureProportion>=0 and featureProportion<=1.0 and not fast):
-          indices = list(random.sample(list(np.arange(0,tx.shape[i.axis])),int(tx.shape[i.axis]*featureProportion)))
+          indices = list(random.sample(list(np.arange(0,tx.shape[axis])),int(tx.shape[axis]*featureProportion)))
           indices.sort()
           i.indices=indices
           i.fast=False
@@ -150,6 +163,7 @@ class ML_Democracy:
         start = time.time()
         i.train_score, i.val_score, i.model = i.fit_func(tx, ty, tvx, tvy)
         i.train_time = time.time()-start
+        i.pre_trained = True
         if verbose:
           print(f"{i.name}, train: {i.train_score}, val: {i.val_score}, trans_time: {i.trans_time} train_time: {i.train_time}")
 
