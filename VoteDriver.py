@@ -150,11 +150,11 @@ mld.validate_voting(x_test, y_test, method=2) # change this back to validate, wh
 
 # %%
 print(mld.get_algo_names())
-mld.mark_for_retrain("logistic reg 4")
 mld.mark_for_retrain("lda 0")
-mld.train_algos()
+mld.train_algos(featureProportion=0.33, bag=True)
 mld.current_algos()
 mld.validate_voting(x_test, y_test, method=0) # change this back to validate, when training set function to vote or not
 mld.validate_voting(x_test, y_test, method=1) # change this back to validate, when training set function to vote or not
 mld.validate_voting(x_test, y_test, method=2)
 # %%
+mld.auto_retrain(std_dist = 2, retrain = True, max_iter = 3, featureProportion=0.33,bag=True, verbose=True)

@@ -94,28 +94,38 @@ class ML_Democracy:
       if i.name == name:
         i.pre_trained = False
 
+  def __data_or_default(self,x_train=None, y_train=None, x_val=None, y_val=None):
+    tx=None
+    ty=None
+    tvx=None
+    tvy=None
+    
+    if x_train is not None:
+      tx = x_train
+    elif self.__default_x_train__ is not None:
+      tx = self.__default_x_train__
+    if y_train is not None:
+      ty = y_train
+    elif self.__default_y_train__ is not None:
+      ty = self.__default_y_train__
+    if x_val is not None:
+      tvx = x_val
+    elif self.__default_x_val__ is not None:
+      tvx = self.__default_x_val__
+    if y_val is not None:
+      tvy = y_val
+    elif self.__default_y_val__ is not None:
+      tvy = self.__default_y_val__
+
+    return tx,ty,tvx,tvy
+
   def train_algos(self, featureProportion=-1.0, bag=False, fast=False, axis=-1, x_train=None, y_train=None, x_val=None, y_val=None, verbose=False):
     # Add check to make sure args are the same or models are all untrained
     if featureProportion>1.0:
       raise ValueError(f"Feature proportion of {featureProportion} cannot be more than 1.0")
     for i in self.__algos__: 
       if not i.pre_trained:
-        if x_train is not None:
-          tx = x_train
-        elif self.__default_x_train__ is not None:
-          tx = self.__default_x_train__
-        if y_train is not None:
-          ty = y_train
-        elif self.__default_y_train__ is not None:
-          ty = self.__default_y_train__
-        if x_val is not None:
-          tvx = x_val
-        elif self.__default_x_val__ is not None:
-          tvx = self.__default_x_val__
-        if y_val is not None:
-          tvy = y_val
-        elif self.__default_y_val__ is not None:
-          tvy = self.__default_y_val__
+        tx,ty,tvx,tvy = self.__data_or_default(tx,ty,tvx,tvy)
 
         if tx is None or ty is None:
           raise ValueError(f"Cannot fit model \"{i.name}\" because tx or ty is None. Call \"set_default_data\" or use \"train_algos(x_train=, y_train=)\" arguments")
@@ -315,3 +325,112 @@ class ML_Democracy:
       algodict['trans_time'] = i.trans_time
       algosList.append(algodict)
     return algosList
+
+  def auto_retrain(self, std_dist=None, retrain = False, max_iter = 10, featureProportion=-1.0, bag=False, fast=False, axis=-1, x_train=None, y_train=None, x_val=None, y_val=None, verbose=False):
+    val_scores = np.zeros((len(self.__algos__)))
+    for i in range(len(self.__algos__)):
+      val_scores[i] = self.__algos__[i].val_score
+    mn = np.mean(val_scores)
+    st = np.std(val_scores)
+    min_acc = mn-st*std_dist
+
+    if verbose:
+      print(f"Mean accuracy: {mn}, Standard deviation: {st}, min_acc: {min_acc}")
+
+    trained = False
+    tnum = 0
+
+    while not trained:
+      trained = True
+      for i in range(len(self.__algos__)):
+        if verbose:
+          print("Algos needing to be trained again: ")
+        if self.__algos__[i].val_score < min_acc:
+          trained = False
+          self.__algos__[i].pre_trained = False
+          if verbose:
+            print(f"Algo: {self.__algos__[i].name}")
+      if not trained and retrain:
+        if tnum == max_iter:
+          print(f"Maximum iterations, {max_iter}, reached in retrain routine")
+          return False
+        tnum +=1
+        if verbose:
+          print(f"re_training iteration {tnum}")
+        if x_val is None and self.__default_x_val__ is None:
+          raise ValueError("In order to auto-retrain models a validation set is needed, but x_val and default x_val are both None")
+        self.train_algos(featureProportion=featureProportion, bag=bag, fast=fast,axis=axis, x_train=x_train, y_train=y_train, x_val=x_val, y_val=y_val)
+        if verbose:
+          self.current_algos()
+      elif not retrain:
+        trained = True
+    
+    #let the user know if some need to be trained
+    trained = True
+    for i in range(len(self.__algos__)):
+      if self.__algos__[i].val_score < min_acc:
+        trained = False
+    if verbose:
+      print(f"Algorithms converged: {trained}")
+    return False
+
+  def auto_prune(self, std_dist=None, verbose=False):
+    val_scores = np.zeros((len(self.__algos__)))
+    for i in range(len(self.__algos__)):
+      val_scores[i] = self.__algos__[i].val_score
+    mn = np.mean(val_scores)
+    st = np.std(val_scores)
+    min_acc = mn-st*std_dist
+
+    if verbose:
+      print(f"Mean accuracy: {mn}, Standard deviation: {st}, min_acc: {min_acc}")
+
+    names = []
+    for i in range(len(self.__algos__)):
+      if verbose:
+        print("Algos being pruned: ")
+      if self.__algos__[i].val_score < min_acc:
+        names.append(self.__algos__[i].name)
+        if verbose:
+          print(f"Algo: {self.__algos__[i].name}")
+
+  def expensive_prune(self, x_val=None, y_val=None, min_algos=0.5, method=0, verbose=False):
+    _x,_y,x_val,y_val = self.__data_or_default(None,None,x_val=x_val,y_val=y_val)
+    if x_val is None or y_val is None:
+      raise ValueError("validation data is required for expensive_prune, either pass x_val and y_val args, or use \"set_default_data\"")
+
+    acc = self.validate_voting(x_val, y_val, method)
+    n_algos = len(self.__algos__)
+    bacc = acc+1
+    algo_to_pop = 0
+
+    while (len(self.__algos__)-1)/n_algos >= min_algos and algo_to_pop>-1: 
+      bacc = acc
+      algo_to_pop = -1
+      for i in range(len(self.__algos__)):
+        algo = self.__algos__.pop(0)
+        tacc = self.validate_voting(x_val,y_val, method)
+        if tacc > bacc:
+          bacc = tacc
+          algo_to_pop = i
+        self.__algos__.append(algo)
+      if algo_to_pop>-1:
+        a = self.__algos__.pop(algo_to_pop)
+        if verbose:
+          print(f"Popped algo {algo_to_pop}: {a.name}")
+    if verbose:
+      print("Done removing algos")
+
+  def validate_models(self, x_val=None, y_val=None, verbose=False):
+    _x,_y,x_val,y_val = self.__data_or_default(None,None,x_val=x_val,y_val=y_val)
+    if x_val is None or y_val is None:
+      raise ValueError("validation data is required for validate_models, either pass x_val= and y_val= args, or use \"set_default_data\"")
+    
+    for i in self.__algos__:
+      tx,ty = i.transform(x_val, y_val)
+      preds = i.predict_func(i.model, x_val)
+      nright=0
+      for p in len(preds):
+        if preds[p]==y_val[p]:
+          nright+=1
+      i.val_score = nright/len(y_val)
