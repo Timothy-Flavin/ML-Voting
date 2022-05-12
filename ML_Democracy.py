@@ -8,7 +8,46 @@ import random
 import warnings
 
 class ML_Algo:
+  """ ML_Algo is a machine learning model/algorithm that is formatted 
+  properly for use in an ensamble through ML_Democracy
 
+    Member Methods:
+
+    fit_function: A function taking 4 arguments, training data, training 
+    labels, validation data, and validation labels. This function needs 
+    to be set as an argument in the ML_Algo's initialization. fit_function
+    should return three objects, a training score between 0.0 and 1.0, a
+    validation score between 0.0 and 1.0, and a model object. The model
+    object can be of any form as long as the predict_function passed to 
+    this ML_Algo can use the model and data alone to make predictions. 
+    The fit_function should obtain it's scores by training the a model on
+    the training data and labels. 
+
+    predict_function: A function taking two arguments, the model returned
+    from fit_funtion, and the data on which to make predictions. It should
+    return a 1D numpy array of integer class predictions in the same order
+    as the data instances provided. 
+
+    transform: ML_Democracy does not assume that models will all expect
+    data in the same format, yet ML_Democracy needs to be able to make
+    online predictions. The solution is a transform function which each 
+    unique ML_Algo should have in order to transform incomming data into
+    the particular model's requirements. If no transform is given, the 
+    model will not transform the data before training or prediction. 
+
+    copy: Returns another instance of this ML_Algo with the same 
+    arguments as this one. 
+
+    Member Variables:
+
+    model_name (string): A unique identifier for this model. This name can be used
+    to add and remove or retrain particular models in the ensamble. 
+
+    pre_trained (boolean): If true, this ML_Algo will not have it's 
+    fit_function called during ML_Democracy's train_algos method. This 
+    is for models which have been pre_trained. 
+
+  """
   def __default_transform__(self, tx,ty):
     return tx, ty
 
@@ -125,10 +164,10 @@ class ML_Democracy:
       raise ValueError(f"Feature proportion of {featureProportion} cannot be more than 1.0")
     for i in self.__algos__: 
       if not i.pre_trained:
-        tx,ty,tvx,tvy = self.__data_or_default(tx,ty,tvx,tvy)
+        tx,ty,tvx,tvy = self.__data_or_default(x_train,y_train,x_val,y_val)
 
         if tx is None or ty is None:
-          raise ValueError(f"Cannot fit model \"{i.name}\" because tx or ty is None. Call \"set_default_data\" or use \"train_algos(x_train=, y_train=)\" arguments")
+          raise ValueError(f"Cannot fit model \"{i.name}\" because x_train or y_train is None. Call \"set_default_data\" or use \"train_algos(x_train=, y_train=)\" arguments")
 
         indices=list()
         if(featureProportion>=0 and featureProportion<=1.0 and not fast):
