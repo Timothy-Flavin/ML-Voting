@@ -35,7 +35,7 @@ class ML_Algo:
     the particular model's requirements. If no transform is given, the 
     model will not transform the data before training or prediction. 
 
-    copy: Returns another instance of this ML_Algo with the same 
+    copy: Returns another instance of this ML_Algo with the same init
     arguments as this one. 
 
     Member Variables:
@@ -49,9 +49,13 @@ class ML_Algo:
 
   """
   def __default_transform__(self, tx,ty):
+    """If no transform function is passed to the model, the default is
+    used. This transform returns the data it is given."""
     return tx, ty
 
   def __init__(self, fit_function, predict_function, model_name, transform=None, pre_trained=False):
+    """Creates an ML_Algo to be used as a part of the ensamble. See 
+    'help(ML_Algo)' for more details"""
     self.fit_func = fit_function
     self.predict_func = predict_function
     self.name = model_name
@@ -70,6 +74,8 @@ class ML_Algo:
     self.seed=0
     
   def copy(self):
+    """ copy: Returns another instance of this ML_Algo with the same init
+    arguments as this one. """
     cp = ML_Algo(self.fit_func, self.predict_func, self.name, self.transform)
     return cp
 
@@ -83,12 +89,26 @@ class ML_Democracy:
     self.fast=None
     self.axis=None
   def set_default_data(self, x_train, x_val, y_train, y_val):
+    """Sets default dataset to be used for ensamble algorithms. Data
+    can be provided here once after initialization of ML_Democracy or 
+    data can be passed in with each algorithm. default data is used 
+    for any model which is not given individual data.
+    
+    Arguments:
+    x_train: training data. Should be numpy array but can be any
+    dimensions
+    y_train: training labels, should be 1 dimensional numpy array 
+    with integer classes
+    x_val: validation data, same format as x_train
+    y_val: validation labels, same format as y_train"""
     self.__default_x_train__ = x_train
     self.__default_x_val__  = x_val
     self.__default_y_train__ = y_train
     self.__default_y_val__  = y_val
 
   def set_num_classifications(self, num):
+    """Number of unique classes. Needed for the 'distance from 
+    randomness' voting algorithm."""
     self.__num_classifications__ = num
 
   def __add_algo__(self, ML_Algo):
@@ -98,6 +118,14 @@ class ML_Democracy:
     self.__algos__.append(ML_Algo)
     
   def add_algo(self, ML_Algo, num=1, verbose=False):
+    """Adds a numbe of algorithms of a given type to the Ensamble. 
+    
+    Arguments:
+    ML_Algo: Algorithm to be added
+    num: Number of said algorithm to be added. Name will be given
+    an increment number to make algorithms maintain unique names
+    verbose: False by default. Set to true for debug informational
+    output."""
     if num==1:
       self.__add_algo__(ML_Algo)
       if verbose:
@@ -111,13 +139,17 @@ class ML_Democracy:
           print(f"Added: {al.name}")
 
   def remove_algo(self, name):
+    """Removes an algorithm by name. String must match
+    exactly."""
     #remove by name, problems for later
+
     for i,a in enumerate(self.__algos__):
       if a.name == name:
         self.__algos__.pop(i)
         return
 
   def get_algo_names(self, verbose=False):
+    """Returns a list of algorithm name strings"""
     names = list()
     for i in self.__algos__:
       names.append(i.name)
@@ -126,9 +158,16 @@ class ML_Democracy:
     return names
 
   def remove_all_algos(self):
+    """Resets ensamble algo list to be empty"""
     self.__algos__ = list()
 
   def mark_for_retrain(self,name):
+    """Given a name to retrain, this will set that algorithm's
+    'pretrained' flag to False. The algorithm will now be 
+    trained when calling train_algos by calling it's fit_func
+    on the training data once again. If bootstrapping is used,
+    a new bootstrap sample will be drawn. A new feature subset
+    will also be selected."""
     for i in self.__algos__:
       if i.name == name:
         i.pre_trained = False
@@ -159,6 +198,36 @@ class ML_Democracy:
     return tx,ty,tvx,tvy
 
   def train_algos(self, featureProportion=-1.0, bag=False, fast=False, axis=-1, x_train=None, y_train=None, x_val=None, y_val=None, verbose=False):
+    """Trains all algorithms in the ensamble with their 'pretrained'
+    flag set to False. The pretrained flag for each algorithm will
+    subsiquently be set to true and validation scores will be 
+    recorded if applicable for future use with voting methods. 
+    
+    Arguments:
+    
+    feature proportion: [0.0-1.0] will result in a subset of the
+    features being used per model in the ensamble. the number of
+    features selected is num_features * featureProportion. 
+    selection method depends on 'fast' argument value. If feature 
+    proportion is set to <0 (-1 by default) all features will 
+    be used for each model. 
+    
+    fast: Boolean. If fast = False, then features will be
+    selected randomly by sampling the supplied 'axis' of the input
+    array without replacement. If fast = True, then a random 
+    contiguous interval along the given axis will be supplied
+    instead for the purposes of selecting a contiguous portion
+    of an image for example. 
+
+    bag: If true, bootstrap sampling will be used for each model.
+    if false, all data will be used on each model. 
+
+    x_train, y_train, x_val, y_val: See 'set_default_data' for
+    more information. These arguments are used if there is no 
+    default data. 
+
+    verbose: False by default, set to True for debug output. 
+    """
     # Add check to make sure args are the same or models are all untrained
     if featureProportion>1.0:
       raise ValueError(f"Feature proportion of {featureProportion} cannot be more than 1.0")
@@ -269,6 +338,11 @@ class ML_Democracy:
     return class_votes
 
   def predict_one(self, x, method):
+    """Used to predict a single data instance. x shoud be a 
+    numpy array of the same shape as a single element of the
+    training data and method can be 0 1 or 2 to determine the
+    voting method used. See 'help(predict)' for more details
+    on method. """
     # change this so that x is a list
     # return max of class votes
     votes = self.__vote__(np.array([x]), method)
