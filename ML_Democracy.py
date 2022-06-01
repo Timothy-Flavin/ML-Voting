@@ -340,7 +340,7 @@ class ML_Democracy:
   def predict_one(self, x, method):
     """Used to predict a single data instance. x shoud be a 
     numpy array of the same shape as a single element of the
-    training data and method can be 0 1 or 2 to determine the
+    given data and method can be 0 1 or 2 to determine the
     voting method used. See 'help(predict)' for more details
     on method. """
     # change this so that x is a list
@@ -349,17 +349,47 @@ class ML_Democracy:
     return votes.index(max(votes))
 
   def predict(self, x, method):
+    """Used to predict n array data instance. x shoud be a 
+    numpy array of the same shape as the training data 
+    and method can be 0 1 or 2 to determine the
+    voting method used. 
+    
+    1. Majority voting: most models win. uppon tie, first 
+    class wins
+    2. Distance from perfection: Models are weighted based
+    on their validation accuracy compared to perfect 
+    accuracy. w = 1.01 / (1.0-val_accuracy)
+    3. Distance from random: Models are weighted based on 
+    their distance from a random classification. 
+    w = val_accuracy - (1.0/num_classes)"""
     # return max of class votes for each x
     votes = self.__vote__(x, method)
     return np.argmax(votes, axis=0)
 
   def predict_no_vote(self, x):
+    """Gets predictions on x for each individual model and 
+    returns a dictionary of the form {model_name: preds}
+    where pres are the predictions made by that model.
+    see "predict" for more information."""
     predictions = {}
     for i in self.__algos__:
       predictions[i.name]=i.predict_func(i.model,x=x)
     return predictions
 
   def test_models(self, x, y, verbose=False):
+    """Given a new dataset, test_models will return the 
+    accuracy scores of each model on that dataset in a
+    dictionary of the form {model_name: score}
+    
+    Arguments: x, y, verbose
+    
+    x: Data, of the same form as the data used in 
+    training. see 'set_default_data for more information
+    
+    y: intger class labels for x
+    
+    verbose: False by default, if set to True, then 
+    debug output will be printed."""
     scores = {}
     for i in self.__algos__:
       scores[i.name]=0
@@ -375,6 +405,8 @@ class ML_Democracy:
     return scores
 
   def validate_voting(self, x, y, method=1):
+    """Given new data, returns the accuracy achieved by
+    a given voting method, default '1'"""
     print("Validating voting ensemble method...")
     num_right = 0
     predictions = self.predict(x, method)
@@ -423,10 +455,18 @@ class ML_Democracy:
     return val_score
 
   def current_algos(self):
+    """Prints sumarry of current algorithms including
+    recorded accuracies and training times. """
     for i in self.__algos__:
       print(f"name: {i.name:15}, train accuracy: {i.train_score:.4f}, val accuracy: {i.val_score:.4f}, test accuracy: {i.test_score:.4f}, time: {i.train_time:17}s, trans_time: {i.trans_time:18}s")
 
   def current_algos_raw(self):
+    """Returns sumarry of current algorithms including
+    recorded accuracies and training times. Summary returned
+    is a list of dictionaries where each dictionary can be 
+    compared to a column in a data table with several 
+    recorded statistics of interest. meant to be used with 
+    pandas data tables for organizing results. """
     algosList = list()
     for i in self.__algos__:
       algodict={}
@@ -439,7 +479,28 @@ class ML_Democracy:
       algosList.append(algodict)
     return algosList
 
-  def auto_retrain(self, std_dist=None, retrain = False, max_iter = 10, featureProportion=-1.0, bag=False, fast=False, axis=-1, x_train=None, y_train=None, x_val=None, y_val=None, verbose=False):
+  def auto_retrain(self, std_dist=None, retrain = True, max_iter = 10, featureProportion=-1.0, bag=False, fast=False, axis=-1, x_train=None, y_train=None, x_val=None, y_val=None, verbose=False):
+    """Refining method for list of algorithms. If certain 
+    algorithms are bad enough, their 'pretrained' flag will
+    be set to False and they will be retrained a number of
+    times until they meet the required metrics. 
+    
+    New Arguments: retrain, max_iter, std_dist
+    Repeated Arguments from train_algos: featureProportion, 
+    bag, fast, axis, x_train, y_train, x_val, y_val, verbose
+    
+    retrain: True by default. If true, algorithms will be 
+    retrained until max_iter is reached. If False, algorithms
+    will only be retrained once. 
+
+    max_iter: Number of times algorithms will be analyzed and
+    retrained. 
+
+    std_dist: Number of standard deviations below average that
+    an algorithm accuracy has to be in order for it to be 
+    retrained. This number is not updated each iteration. 
+    """
+    
     val_scores = np.zeros((len(self.__algos__)))
     for i in range(len(self.__algos__)):
       val_scores[i] = self.__algos__[i].val_score
@@ -488,6 +549,18 @@ class ML_Democracy:
     return False
 
   def auto_prune(self, std_dist=None, verbose=False):
+    """Pruning method for list of algorithms. If certain 
+    algorithms are bad enough, they will be removed from 
+    the ensamble. 
+    
+    Arguments: std_dist, verbose
+    
+    std_dist: Number of standard deviations below average that
+    an algorithm accuracy has to be in order for it to be 
+    retrained.
+
+    verbose: False by default. if True, will print debug info. 
+    """
     val_scores = np.zeros((len(self.__algos__)))
     for i in range(len(self.__algos__)):
       val_scores[i] = self.__algos__[i].val_score
@@ -508,6 +581,30 @@ class ML_Democracy:
           print(f"Algo: {self.__algos__[i].name}")
 
   def expensive_prune(self, x_val=None, y_val=None, min_algos=0.5, method=0, verbose=False):
+    """Pruning method for list of algorithms. If certain 
+    algorithms reduce the ensamble's validation accuracy,
+    they will be removed from the ensamble. This method 
+    is more expensive because the ensamble will need to 
+    be validated n times per removal where n is the 
+    number of models in the ensamble. 
+    
+    Arguments: x_val, y_val, min_algos, method, verbose
+    
+    x_val: Validation data if default data is not set. 
+    None by default. See set_default_data.
+    
+    y_val: Validation labels if default labels are not set. 
+    None by default. See set_default_data.
+    
+    min_algos: Minimum proportion of algorithms to keep in the 
+    ensamble. between 0.0 and 1.0 
+    
+    method: Voting method to be used.
+    
+    verbose: False by default. If true, debug output will be
+    printed. 
+    
+    """
     _x,_y,x_val,y_val = self.__data_or_default(None,None,x_val=x_val,y_val=y_val)
     if x_val is None or y_val is None:
       raise ValueError("validation data is required for expensive_prune, either pass x_val and y_val args, or use \"set_default_data\"")
@@ -535,6 +632,11 @@ class ML_Democracy:
       print("Done removing algos")
 
   def validate_models(self, x_val=None, y_val=None, verbose=False):
+    """Given validation data and labels, records the 
+    validation accuracy of the models int he ensamble
+    for later use with weighted voting. use 
+    current_algos(), or current_algos_raw() in order 
+    to see results."""
     _x,_y,x_val,y_val = self.__data_or_default(None,None,x_val=x_val,y_val=y_val)
     if x_val is None or y_val is None:
       raise ValueError("validation data is required for validate_models, either pass x_val= and y_val= args, or use \"set_default_data\"")
